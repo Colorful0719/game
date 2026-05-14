@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>七軍領地爭奪戰 - P2P 穩定增強版</title>
+    <title>七軍領地爭奪戰 - P2P 穩定版</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -11,10 +11,12 @@
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
-        body { font-family: 'Noto Sans TC', sans-serif; background-color: #020617; color: white; margin: 0; }
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #020617; color: white; margin: 0; overflow: hidden; }
         .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
         @keyframes scan { from { transform: translateY(-100%); } to { transform: translateY(100vh); } }
-        .scan-line { position: absolute; height: 2px; width: 100%; background: linear-gradient(to right, transparent, #22d3ee, transparent); animation: scan 4s linear infinite; pointer-events: none; }
+        .scan-line { position: absolute; height: 2px; width: 100%; background: linear-gradient(to right, transparent, #22d3ee, transparent); animation: scan 4s linear infinite; pointer-events: none; z-index: 10; }
+        .btn-pulse:active { transform: scale(0.9); }
+        .grid-cell { transition: background-color 0.5s ease; }
     </style>
 </head>
 <body>
@@ -38,56 +40,55 @@
             { q: "哪一個是前端框架？", a: ["Django", "React", "Laravel"], c: 1 },
             { q: "JavaScript 宣告常數用？", a: ["let", "var", "const"], c: 2 },
             { q: "1KB 等於多少 Byte？", a: ["1000", "1024", "2048"], c: 1 },
+            { q: "網頁內容的結構化語言是？", a: ["CSS", "HTML", "JSON"], c: 1 },
+            { q: "CSS 用來設定字體大小的屬性是？", a: ["text-size", "font-style", "font-size"], c: 2 },
+            { q: "HTTP 的全名開頭是？", a: ["HyperText", "HighText", "HyperTool"], c: 0 },
         ];
 
-        // Google 公共 STUN 伺服器，協助穿透防火牆
+        // 使用 Google STUN 伺服器增加穿透率
         const PEER_CONFIG = {
             config: {
                 'iceServers': [
                     { url: 'stun:stun.l.google.com:19302' },
-                    { url: 'stun:stun1.l.google.com:19302' },
-                    { url: 'stun:stun2.l.google.com:19302' }
+                    { url: 'stun:stun1.l.google.com:19302' }
                 ]
             }
         };
 
         function App() {
-            const [mode, setMode] = useState(null);
+            const [mode, setMode] = useState(null); // 'host', 'client'
+            const [clientStage, setClientStage] = useState('connect'); // 'connect', 'setup', 'play'
             const [peerId, setPeerId] = useState('');
             const [targetId, setTargetId] = useState('');
             const [grid, setGrid] = useState(Array(100).fill(null));
             const [userName, setUserName] = useState('');
             const [myTeam, setMyTeam] = useState(null);
-            const [isReady, setIsReady] = useState(false);
             const [cooldown, setCooldown] = useState(0);
             const [showQuiz, setShowQuiz] = useState(null);
-            const [status, setStatus] = useState('初始化中...');
+            const [status, setStatus] = useState('準備中...');
             
             const peerRef = useRef(null);
-            const connsRef = useRef([]);
+            const connRef = useRef(null); // 學生端：連向老師的通道
+            const connectionsRef = useRef([]); // 老師端：所有學生的通道
 
-            // 老師端初始化
+            // 老師端邏輯
             useEffect(() => {
                 if (mode === 'host') {
                     const peer = new Peer(PEER_CONFIG);
                     peerRef.current = peer;
-
-                    peer.on('open', id => {
-                        setPeerId(id);
-                        setStatus('系統已就緒，請分享 ID 給學生');
-                    });
-
+                    peer.on('open', id => { setPeerId(id); setStatus('等待學生加入...'); });
                     peer.on('connection', conn => {
-                        connsRef.current.push(conn);
-                        conn.on('open', () => {
-                            conn.send({ type: 'SYNC', grid });
+                        connectionsRef.current.push(conn);
+                        conn.on('open', () => { 
+                            conn.send({ type: 'SYNC', grid }); 
                         });
                         conn.on('data', data => {
                             if (data.type === 'CAPTURE') {
                                 setGrid(prev => {
                                     const next = [...prev];
                                     next[data.index] = { team: data.teamId, owner: data.name };
-                                    connsRef.current.forEach(c => {
+                                    // 廣播給所有人
+                                    connectionsRef.current.forEach(c => {
                                         if (c.open) c.send({ type: 'SYNC', grid: next });
                                     });
                                     return next;
@@ -98,30 +99,32 @@
                 }
             }, [mode]);
 
-            // 學生端連線
+            // 學生端連線邏輯
             const connect = () => {
+                if (!targetId) return;
                 const peer = new Peer(PEER_CONFIG);
                 peerRef.current = peer;
-                setStatus('連線中...');
-
+                setStatus('嘗試連線中...');
                 peer.on('open', () => {
                     const conn = peer.connect(targetId);
+                    connRef.current = conn;
                     conn.on('open', () => {
-                        connsRef.current = [conn];
-                        setIsReady(true);
                         setStatus('連線成功');
+                        setClientStage('setup');
                     });
-                    conn.on('data', data => {
-                        if (data.type === 'SYNC') setGrid(data.grid);
+                    conn.on('data', data => { 
+                        if (data.type === 'SYNC') setGrid(data.grid); 
                     });
-                    conn.on('error', () => setStatus('連線失敗，請檢查 ID'));
+                    conn.on('error', () => setStatus('連線失敗'));
                 });
             };
 
             const handleAnswer = (idx) => {
                 if (idx === showQuiz.c) {
                     const index = Math.floor(Math.random() * 100);
-                    connsRef.current[0]?.send({ type: 'CAPTURE', index, teamId: myTeam.id, name: userName });
+                    if (connRef.current && connRef.current.open) {
+                        connRef.current.send({ type: 'CAPTURE', index, teamId: myTeam.id, name: userName });
+                    }
                     setCooldown(3);
                 } else {
                     setCooldown(8);
@@ -136,10 +139,11 @@
                 }
             }, [cooldown]);
 
+            // 1. 模式選擇
             if (!mode) {
                 return (
                     <div className="min-h-screen flex items-center justify-center bg-slate-950 p-6">
-                        <div className="glass p-10 rounded-3xl w-full max-w-sm text-center space-y-6">
+                        <div className="glass p-10 rounded-3xl w-full max-w-sm text-center space-y-6 shadow-2xl">
                             <h1 className="text-3xl font-black text-cyan-400 italic">七軍領地戰</h1>
                             <div className="space-y-4">
                                 <button onClick={() => setMode('host')} className="w-full py-4 bg-indigo-600 rounded-xl font-bold">我是老師 (顯示大螢幕)</button>
@@ -150,24 +154,81 @@
                 );
             }
 
+            // 2. 老師介面 (大螢幕)
             if (mode === 'host') {
+                const stats = TEAMS.map(t => ({ ...t, count: grid.filter(g => g?.team === t.id).length }));
                 return (
-                    <div className="min-h-screen p-6 bg-slate-950 flex flex-col">
-                        <div className="flex justify-between items-start mb-6">
+                    <div className="min-h-screen p-6 bg-slate-950 flex flex-col gap-6">
+                        <div className="flex justify-between items-start">
                             <div>
-                                <h1 className="text-3xl font-black text-cyan-400">戰略大螢幕</h1>
-                                <p className="text-sm text-slate-400">{status}</p>
+                                <h1 className="text-4xl font-black text-cyan-400 italic">戰略即時地圖</h1>
+                                <p className="text-slate-400 font-bold">{status}</p>
                             </div>
-                            <div className="glass p-4 rounded-xl text-right">
-                                <p className="text-xs text-slate-400 uppercase font-bold">學生加入 ID:</p>
-                                <p className="text-2xl font-mono font-bold text-white select-all">{peerId || '產生中...'}</p>
+                            <div className="glass p-4 rounded-2xl text-center min-w-[200px]">
+                                <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">連線 ID</p>
+                                <p className="text-2xl font-mono font-bold text-white select-all">{peerId || '取得中...'}</p>
                             </div>
                         </div>
-                        <div className="flex-1 flex items-center justify-center">
-                            <div className="grid grid-cols-10 gap-1 aspect-square w-full max-w-[600px] relative glass p-2">
+                        <div className="flex-1 flex gap-6 overflow-hidden">
+                            <div className="w-64 space-y-3">
+                                {stats.sort((a,b) => b.count - a.count).map((s, idx) => (
+                                    <div key={s.id} className="glass p-3 rounded-xl">
+                                        <div className="flex justify-between text-xs font-bold mb-1">
+                                            <span>{s.name}</span>
+                                            <span>{s.count}</span>
+                                        </div>
+                                        <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+                                            <div className={`${s.color} h-full transition-all duration-1000`} style={{ width: `${s.count}%` }} />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="flex-1 glass rounded-3xl p-4 relative overflow-hidden flex items-center justify-center">
                                 <div className="scan-line"></div>
-                                {grid.map((c, i) => (
-                                    <div key={i} className={`rounded-sm transition-all duration-500 ${c ? TEAMS.find(t => t.id === c.team).color : 'bg-slate-900'}`}></div>
+                                <div className="grid grid-cols-10 gap-1 aspect-square h-full max-h-[600px] w-auto">
+                                    {grid.map((c, i) => (
+                                        <div key={i} className={`grid-cell rounded-sm ${c ? TEAMS.find(t => t.id === c.team).color : 'bg-slate-900/50'}`}>
+                                            {c && <div className="hidden hover:block absolute inset-0 bg-black/50 text-[6px] text-white flex items-center justify-center">{c.owner}</div>}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            // 3. 學生階段：輸入連線 ID
+            if (clientStage === 'connect') {
+                return (
+                    <div className="min-h-screen flex items-center justify-center p-6 bg-slate-950">
+                        <div className="glass p-8 rounded-3xl w-full max-w-sm space-y-4">
+                            <h2 className="text-xl font-bold text-white">連線至戰場</h2>
+                            <p className="text-sm text-slate-400">{status}</p>
+                            <input value={targetId} onChange={e => setTargetId(e.target.value)} placeholder="輸入老師提供的 ID" className="w-full p-4 bg-slate-900 rounded-xl border border-slate-700 text-center font-mono text-white outline-none focus:border-cyan-500" />
+                            <button onClick={connect} className="w-full py-4 bg-cyan-600 rounded-xl font-bold text-white shadow-lg">確認連線</button>
+                        </div>
+                    </div>
+                );
+            }
+
+            // 4. 學生階段：姓名與軍團選擇
+            if (clientStage === 'setup') {
+                return (
+                    <div className="min-h-screen flex flex-col items-center justify-center p-6 space-y-8 bg-slate-950">
+                        <div className="text-center">
+                            <h2 className="text-2xl font-bold text-cyan-400">軍團報到</h2>
+                            <p className="text-slate-500 text-sm">輸入姓名並選擇你的陣營</p>
+                        </div>
+                        <div className="w-full max-w-xs space-y-4">
+                            <input value={userName} onChange={e => setUserName(e.target.value)} placeholder="你的名字" className="w-full p-4 bg-slate-900 rounded-xl text-center text-white border border-slate-800 outline-none focus:border-indigo-500" />
+                            <div className="grid grid-cols-2 gap-2">
+                                {TEAMS.map(t => (
+                                    <button key={t.id} 
+                                        onClick={() => { if(userName.length >= 2){ setMyTeam(t); setClientStage('play'); } }} 
+                                        className={`${t.color} py-3 rounded-xl text-xs font-bold shadow-lg text-white btn-pulse`}>
+                                        {t.name}
+                                    </button>
                                 ))}
                             </div>
                         </div>
@@ -175,55 +236,51 @@
                 );
             }
 
-            if (mode === 'client' && !isReady) {
-                return (
-                    <div className="min-h-screen flex items-center justify-center p-6">
-                        <div className="glass p-8 rounded-3xl w-full max-w-sm space-y-4">
-                            <h2 className="text-xl font-bold">連線至老師</h2>
-                            <p className="text-sm text-slate-400">{status}</p>
-                            <input value={targetId} onChange={e => setTargetId(e.target.value)} placeholder="輸入老師畫面的 ID" className="w-full p-4 bg-slate-900 rounded-xl outline-none border border-slate-700 text-center font-mono" />
-                            <button onClick={connect} className="w-full py-4 bg-cyan-600 rounded-xl font-bold">確認連線</button>
-                        </div>
-                    </div>
-                );
-            }
-
-            if (mode === 'client' && !myTeam) {
-                return (
-                    <div className="min-h-screen flex flex-col items-center justify-center p-6 space-y-6">
-                        <h2 className="text-2xl font-bold">輸入姓名並選組</h2>
-                        <input value={userName} onChange={e => setUserName(e.target.value)} placeholder="你的名字" className="w-full max-w-xs p-4 bg-slate-900 rounded-xl text-center outline-none" />
-                        <div className="grid grid-cols-2 gap-2 w-full max-w-xs">
-                            {TEAMS.map(t => (
-                                <button key={t.id} onClick={() => userName.length >= 2 && setMyTeam(t)} className={`${t.color} py-3 rounded-lg text-sm font-bold shadow-lg`}>{t.name}</button>
-                            ))}
-                        </div>
-                    </div>
-                );
-            }
-
+            // 5. 學生階段：戰鬥中 (出擊)
             return (
                 <div className="min-h-screen flex flex-col bg-slate-950">
-                    <div className={`${myTeam?.color} p-4 text-center font-bold text-white shadow-xl`}>
-                        {userName} - {myTeam?.name}
+                    <div className={`${myTeam?.color} p-4 text-center font-bold text-white shadow-xl flex justify-between px-6`}>
+                        <span>{userName}</span>
+                        <span>{myTeam?.name}</span>
                     </div>
-                    <div className="flex-1 flex items-center justify-center">
+                    
+                    <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-10">
                         <button 
                             onClick={() => setShowQuiz(QUESTIONS[Math.floor(Math.random()*QUESTIONS.length)])} 
                             disabled={cooldown > 0 || !!showQuiz} 
-                            className={`w-56 h-56 rounded-full font-black text-2xl transition-all shadow-2xl
-                            ${cooldown > 0 ? 'bg-slate-800' : myTeam?.color + ' animate-pulse active:scale-95'}`}>
-                            {cooldown > 0 ? cooldown : '出擊佔領'}
+                            className={`w-56 h-56 rounded-full font-black text-2xl transition-all shadow-2xl btn-pulse text-white flex flex-col items-center justify-center
+                            ${cooldown > 0 ? 'bg-slate-800' : myTeam?.color + ' animate-pulse'}`}>
+                            {cooldown > 0 ? (
+                                <>
+                                    <span className="text-5xl">{cooldown}</span>
+                                    <span className="text-xs mt-2 opacity-50 uppercase">Reloading</span>
+                                </>
+                            ) : '出擊佔領'}
                         </button>
+                        
+                        <div className="w-full max-w-xs space-y-2">
+                            <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase">
+                                <span>當前戰況</span>
+                                <span>佔領數: {grid.filter(g => g?.team === myTeam?.id).length}</span>
+                            </div>
+                            <div className="h-1.5 bg-slate-900 rounded-full overflow-hidden flex">
+                                {TEAMS.map(t => (
+                                    <div key={t.id} className={`${t.color} h-full transition-all duration-500`} 
+                                         style={{ width: `${grid.filter(g => g?.team === t.id).length}%` }} />
+                                ))}
+                            </div>
+                        </div>
                     </div>
 
                     {showQuiz && (
-                        <div className="fixed inset-0 bg-black/90 flex items-center justify-center p-6 z-50">
-                            <div className="bg-white text-slate-900 w-full max-w-sm rounded-3xl p-8 space-y-4">
-                                <h3 className="text-xl font-bold">{showQuiz.q}</h3>
-                                {showQuiz.a.map((ans, i) => (
-                                    <button key={i} onClick={() => handleAnswer(i)} className="w-full p-4 text-left border-2 rounded-xl font-bold hover:bg-slate-100">{ans}</button>
-                                ))}
+                        <div className="fixed inset-0 bg-slate-950/95 flex items-center justify-center p-6 z-50">
+                            <div className="bg-white text-slate-900 w-full max-w-sm rounded-3xl p-8 space-y-6">
+                                <h3 className="text-xl font-bold leading-tight">{showQuiz.q}</h3>
+                                <div className="space-y-3">
+                                    {showQuiz.a.map((ans, i) => (
+                                        <button key={i} onClick={() => handleAnswer(i)} className="w-full p-4 text-left border-2 border-slate-100 rounded-2xl font-bold hover:bg-slate-50 active:bg-slate-100 transition-colors text-sm">{ans}</button>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     )}
