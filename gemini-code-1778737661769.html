@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>七軍領地爭奪戰 - P2P 免設定版</title>
+    <!-- STREAMING_CHUNK:載入基礎框架與樣式... -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #020617; color: white; margin: 0; overflow-x: hidden; }
+        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        @keyframes scan { from { transform: translateY(-100%); } to { transform: translateY(100vh); } }
+        .scan-line { position: absolute; height: 2px; width: 100%; background: linear-gradient(to right, transparent, #22d3ee, transparent); animation: scan 4s linear infinite; pointer-events: none; z-index: 10; }
+        .grid-cell { transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+        .btn-active:active { transform: scale(0.95); }
+        .pixel-text { text-shadow: 0 0 10px rgba(34, 211, 238, 0.8); }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+
+        /* STREAMING_CHUNK:定義軍團與題目資料... */
+        const TEAMS = [
+            { id: 'red', name: '紅龍軍', color: 'bg-red-500' },
+            { id: 'blue', name: '藍鯨軍', color: 'bg-blue-500' },
+            { id: 'green', name: '綠林軍', color: 'bg-green-500' },
+            { id: 'yellow', name: '黃金軍', color: 'bg-yellow-500' },
+            { id: 'purple', name: '紫焰軍', color: 'bg-purple-500' },
+            { id: 'orange', name: '橘虎軍', color: 'bg-orange-500' },
+            { id: 'cyan', name: '青羽軍', color: 'bg-cyan-500' },
+        ];
+
+        const QUESTIONS = [
+            { q: "HTML 中連結的標籤是？", a: ["<link>", "<a>", "<img>"], c: 1 },
+            { q: "哪一個是前端框架？", a: ["Django", "React", "Laravel"], c: 1 },
+            { q: "JavaScript 宣告常數用？", a: ["let", "var", "const"], c: 2 },
+            { q: "1KB 等於多少 Byte？", a: ["1000", "1024", "2048"], c: 1 },
+            { q: "CSS 中設定背景顏色是？", a: ["color", "bg-color", "background-color"], c: 2 },
+            { q: "哪種協議用於網頁傳輸？", a: ["FTP", "SMTP", "HTTPS"], c: 2 },
+            { q: "WWW 是什麼的縮寫？", a: ["World Wide Web", "Web World Wide", "Wide Web World"], c: 0 },
+        ];
+
+        function App() {
+            /* STREAMING_CHUNK:初始化狀態變數... */
+            const [mode, setMode] = useState(null); // 'host' (老師) or 'client' (學生)
+            const [peerId, setPeerId] = useState('');
+            const [targetId, setTargetId] = useState('');
+            const [grid, setGrid] = useState(Array(100).fill(null));
+            const [userName, setUserName] = useState('');
+            const [myTeam, setMyTeam] = useState(null);
+            const [isReady, setIsReady] = useState(false);
+            const [cooldown, setCooldown] = useState(0);
+            const [showQuiz, setShowQuiz] = useState(null);
+            const [status, setStatus] = useState('等待系統初始化...');
+            const [feedback, setFeedback] = useState(null);
+
+            const peerRef = useRef(null);
+            const connectionsRef = useRef([]); // 老師端專用：存儲所有學生的連線
+
+            /* STREAMING_CHUNK:實作老師端 P2P 邏輯... */
+            useEffect(() => {
+                if (mode === 'host') {
+                    const peer = new Peer();
+                    peerRef.current = peer;
+
+                    peer.on('open', (id) => {
+                        setPeerId(id);
+                        setStatus('系統就緒，請分享下方 ID 給學生');
+                    });
+
+                    peer.on('connection', (conn) => {
+                        connectionsRef.current.push(conn);
+                        
+                        conn.on('open', () => {
+                            // 當學生連入，立刻把當前地圖傳給他
+                            conn.send({ type: 'SYNC_GRID', data: grid });
+                        });
+
+                        conn.on('data', (payload) => {
+                            if (payload.type === 'CAPTURE') {
+                                setGrid(prev => {
+                                    const next = [...prev];
+                                    next[payload.index] = { team: payload.teamId, owner: payload.name };
+                                    // 廣播給所有連線中的學生
+                                    connectionsRef.current.forEach(c => {
+                                        if (c.open) c.send({ type: 'SYNC_GRID', data: next });
+                                    });
+                                    return next;
+                                });
+                            }
+                        });
+                    });
+
+                    return () => peer.destroy();
+                }
+            }, [mode]);
+
+            /* STREAMING_CHUNK:實作學生端 P2P 邏輯... */
+            const connectToHost = () => {
+                if (!targetId) return;
+                setStatus('嘗試連線中...');
+                const peer = new Peer();
+                peerRef.current = peer;
+
+                peer.on('open', () => {
+                    const conn = peer.connect(targetId);
+                    conn.on('open', () => {
+                        setStatus('連線成功！');
+                        setIsReady(true);
+                        connectionsRef.current = [conn];
+                    });
+
+                    conn.on('data', (payload) => {
+                        if (payload.type === 'SYNC_GRID') {
+                            setGrid(payload.data);
+                        }
+                    });
+
+                    conn.on('error', () => {
+                        setStatus('連線失敗，請檢查 ID 是否正確');
+                    });
+                });
+            };
+
+            const handleAnswer = (idx) => {
+                if (idx === showQuiz.c) {
+                    setFeedback({ success: true, msg: '答對了！領地擴張中' });
+                    const randomIndex = Math.floor(Math.random() * 100);
+                    if (connectionsRef.current[0]) {
+                        connectionsRef.current[0].send({
+                            type: 'CAPTURE',
+                            index: randomIndex,
+                            teamId: myTeam.id,
+                            name: userName
+                        });
+                    }
+                    setCooldown(3);
+                } else {
+                    setFeedback({ success: false, msg: '答錯了！部隊重整中' });
+                    setCooldown(8);
+                }
+                setTimeout(() => { setShowQuiz(null); setFeedback(null); }, 1500);
+            };
+
+            useEffect(() => {
+                if (cooldown > 0) {
+                    const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
+                    return () => clearTimeout(timer);
+                }
+            }, [cooldown]);
+
+            /* STREAMING_CHUNK:渲染首頁入口... */
+            if (!mode) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center p-6 bg-slate-950">
+                        <div className="max-w-md w-full glass p-10 rounded-[3rem] text-center space-y-8 shadow-2xl">
+                            <div className="space-y-2">
+                                <h1 className="text-4xl font-black text-cyan-400 tracking-tighter italic pixel-text">SEVEN ARMY WAR</h1>
+                                <p className="text-slate-500 text-sm font-bold tracking-widest uppercase">P2P 靜態無伺服器版</p>
+                            </div>
+                            <div className="space-y-4">
+                                <button onClick={() => setMode('host')} className="w-full p-5 bg-indigo-600 rounded-2xl font-bold hover:bg-indigo-500 transition-all text-white shadow-lg">我是老師 (開啟大螢幕)</button>
+                                <button onClick={() => setMode('client')} className="w-full p-5 bg-white text-slate-900 rounded-2xl font-bold hover:bg-slate-100 transition-all shadow-lg">我是學生 (加入戰鬥)</button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            /* STREAMING_CHUNK:渲染老師端介面... */
+            if (mode === 'host') {
+                const stats = TEAMS.map(t => ({ ...t, count: grid.filter(g => g?.team === t.id).length }));
+                return (
+                    <div className="min-h-screen p-8 flex flex-col gap-8 bg-slate-950">
+                        <header className="flex justify-between items-start">
+                            <div>
+                                <h1 className="text-5xl font-black text-cyan-400 italic pixel-text">戰略大螢幕</h1>
+                                <p className={`mt-2 text-sm font-bold ${peerId ? 'text-green-400' : 'text-yellow-400'}`}>{status}</p>
+                            </div>
+                            {peerId && (
+                                <div className="glass p-5 rounded-3xl border-cyan-500/50 text-center">
+                                    <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest mb-1">學生加入 ID</p>
+                                    <p className="text-2xl font-mono font-black text-white bg-slate-900/50 px-4 py-2 rounded-xl">{peerId}</p>
+                                </div>
+                            )}
+                        </header>
+
+                        <div className="flex-1 grid grid-cols-12 gap-8">
+                            <div className="col-span-3 space-y-3">
+                                {stats.sort((a,b) => b.count - a.count).map((s, idx) => (
+                                    <div key={s.id} className="glass p-4 rounded-2xl border-l-4" style={{borderLeftColor: s.color.replace('bg-', '')}}>
+                                        <div className="flex justify-between font-black text-sm text-white">
+                                            <span>#{idx+1} {s.name}</span>
+                                            <span>{s.count}</span>
+                                        </div>
+                                        <div className="h-1.5 bg-slate-900 rounded-full mt-2 overflow-hidden">
+                                            <div className={`${s.color} h-full transition-all duration-1000`} style={{ width: `${s.count}%` }} />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="col-span-9 glass rounded-[3rem] p-4 relative overflow-hidden flex items-center justify-center">
+                                <div className="scan-line"></div>
+                                <div className="grid grid-cols-10 grid-rows-10 gap-1.5 w-full h-full max-w-[600px] aspect-square">
+                                    {grid.map((cell, i) => {
+                                        const team = TEAMS.find(t => t.id === cell?.team);
+                                        return (
+                                            <div key={i} className={`grid-cell rounded-sm relative group
+                                                ${team ? team.color : 'bg-slate-900/40'}`}>
+                                                {cell && (
+                                                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-black/90 flex items-center justify-center text-[7px] font-black p-1 text-center transition-opacity rounded-sm">
+                                                        {cell.owner}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            /* STREAMING_CHUNK:渲染學生端介面... */
+            if (mode === 'client') {
+                if (!isReady) {
+                    return (
+                        <div className="min-h-screen flex items-center justify-center p-6 bg-slate-950">
+                            <div className="max-w-md w-full glass p-10 rounded-[3rem] space-y-6">
+                                <h2 className="text-2xl font-bold text-white text-center">連接到老師</h2>
+                                <p className="text-slate-400 text-sm text-center">{status}</p>
+                                <input type="text" value={targetId} onChange={e => setTargetId(e.target.value)} placeholder="輸入老師畫面的 ID..."
+                                    className="w-full p-5 bg-slate-900 rounded-2xl text-center text-white border border-slate-700 outline-none focus:border-cyan-500 font-mono text-xl" />
+                                <button onClick={connectToHost} className="w-full p-5 bg-cyan-600 rounded-2xl font-bold text-white shadow-lg btn-active">確認連線</button>
+                            </div>
+                        </div>
+                    );
+                }
+
+                if (!myTeam) {
+                    return (
+                        <div className="min-h-screen flex flex-col items-center justify-center p-6 space-y-8 bg-slate-950">
+                            <h2 className="text-3xl font-black text-cyan-400">軍團報到</h2>
+                            <div className="w-full max-w-sm space-y-4">
+                                <input type="text" value={userName} onChange={e => setUserName(e.target.value)} placeholder="輸入你的姓名..."
+                                    className="w-full p-5 bg-slate-900 rounded-2xl text-center text-white border border-slate-800 text-xl" />
+                                <div className="grid grid-cols-2 gap-3">
+                                    {TEAMS.map(t => (
+                                        <button key={t.id} onClick={() => userName.length >= 2 && setMyTeam(t)} 
+                                            className={`${t.color} p-5 rounded-2xl font-bold text-white active:scale-95 transition-transform shadow-lg text-sm`}>{t.name}</button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    );
+                }
+
+                return (
+                    <div className="min-h-screen flex flex-col bg-slate-950 text-white">
+                        <div className={`${myTeam.color} p-6 flex justify-between items-center sticky top-0 shadow-xl z-10`}>
+                            <h2 className="font-black text-xl">{userName}</h2>
+                            <div className="bg-black/20 px-4 py-1 rounded-full text-xs font-bold uppercase tracking-widest">{myTeam.name}</div>
+                        </div>
+                        <div className="flex-1 flex flex-col items-center justify-center p-6">
+                            <button 
+                                disabled={cooldown > 0 || !!showQuiz} 
+                                onClick={() => setShowQuiz(QUESTIONS[Math.floor(Math.random()*QUESTIONS.length)])}
+                                className={`w-64 h-64 rounded-full border-[12px] border-white/10 shadow-2xl flex flex-col items-center justify-center transition-all btn-active
+                                ${cooldown > 0 ? 'bg-slate-800 scale-95' : myTeam.color + ' animate-pulse'}`}>
+                                <span className="text-7xl font-black">{cooldown > 0 ? cooldown : '⚔️'}</span>
+                                <span className="font-black mt-2 text-xl">{cooldown > 0 ? '冷卻重整' : '出擊佔領'}</span>
+                            </button>
+                            <div className="mt-12 w-full max-w-xs space-y-2">
+                                <div className="flex justify-between text-xs font-bold text-slate-500">
+                                    <span>戰況進度</span>
+                                    <span>{Math.round(grid.filter(g => g !== null).length)} / 100</span>
+                                </div>
+                                <div className="h-2 bg-slate-900 rounded-full overflow-hidden flex">
+                                    {TEAMS.map(t => (
+                                        <div key={t.id} className={`${t.color} h-full transition-all duration-500`} 
+                                             style={{ width: `${grid.filter(g => g?.team === t.id).length}%` }} />
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {showQuiz && (
+                            <div className="fixed inset-0 bg-slate-950/95 flex items-center justify-center p-6 z-50">
+                                <div className="bg-white text-slate-900 w-full max-w-md rounded-[2.5rem] p-10 space-y-6 shadow-2xl">
+                                    {!feedback ? (
+                                        <>
+                                            <h3 className="text-2xl font-bold leading-tight">{showQuiz.q}</h3>
+                                            <div className="space-y-3">
+                                                {showQuiz.a.map((ans, i) => (
+                                                    <button key={i} onClick={() => handleAnswer(i)} 
+                                                        className="w-full p-5 text-left border-2 border-slate-100 rounded-2xl font-bold hover:bg-cyan-50 transition-colors btn-active text-lg">{ans}</button>
+                                                ))}
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div className="text-center py-10 space-y-4">
+                                            <div className="text-8xl">{feedback.success ? '✅' : '❌'}</div>
+                                            <div className="text-3xl font-black">{feedback.msg}</div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            }
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
+```eof
+
+### 📦 如何下載與使用？
+
+1.  **複製程式碼**：將上面的完整 HTML 內容複製。
+2.  **存檔**：在你的電腦上建立一個新檔案，命名為 `game.html`。
+3.  **執行**：用瀏覽器（建議 Chrome）直接打開它。
+4.  **上傳 Github**：你可以直接把這個 `game.html` 上傳到 Github Repository 的 main 分支，然後開啟 GitHub Pages 服務。
+
+### 🎮 遊戲開始流程：
+*   **老師端**：點擊「我是老師」，等待 ID 出現。
+*   **學生端**：點擊「我是學生」，輸入老師畫面上的 ID。
+*   **玩法**：答對題目可以佔領一個方格，答錯會冷卻 8 秒。大螢幕會顯示是誰佔領了哪裡（滑鼠移上去可以看到名字）。
+
+**注意**：這採用 PeerJS 技術，如果連線不成功，通常是學校網路的防火牆擋住了 P2P 連線。若發生此情況，請老師用手機分享熱點給全班連線，即可順暢遊玩！
