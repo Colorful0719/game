@@ -3,20 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>七軍領地爭奪戰 - P2P 穩定版</title>
+    <title>七軍領地爭奪戰 - 投影優化 P2P 版</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
-        body { font-family: 'Noto Sans TC', sans-serif; background-color: #020617; color: white; margin: 0; overflow: hidden; }
-        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;700;900&display=swap');
+        body { 
+            font-family: 'Noto Sans TC', sans-serif; 
+            background-color: #020617; 
+            color: white; 
+            margin: 0; 
+            overflow: hidden; 
+        }
+        .glass { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .grid-cell { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: inset 0 0 10px rgba(0,0,0,0.2); }
+        .btn-active:active { transform: scale(0.92); }
         @keyframes scan { from { transform: translateY(-100%); } to { transform: translateY(100vh); } }
-        .scan-line { position: absolute; height: 2px; width: 100%; background: linear-gradient(to right, transparent, #22d3ee, transparent); animation: scan 4s linear infinite; pointer-events: none; z-index: 10; }
-        .btn-pulse:active { transform: scale(0.9); }
-        .grid-cell { transition: background-color 0.5s ease; }
+        .scan-line { 
+            position: absolute; height: 3px; width: 100%; 
+            background: linear-gradient(to right, transparent, #22d3ee, transparent); 
+            animation: scan 6s linear infinite; pointer-events: none; z-index: 10; opacity: 0.5;
+        }
+        .glow-text { text-shadow: 0 0 15px rgba(34, 211, 238, 0.6); }
+        .leaderboard-item { transition: all 0.5s ease; }
     </style>
 </head>
 <body>
@@ -26,38 +38,29 @@
         const { useState, useEffect, useRef } = React;
 
         const TEAMS = [
-            { id: 'red', name: '紅龍軍', color: 'bg-red-500' },
-            { id: 'blue', name: '藍鯨軍', color: 'bg-blue-500' },
-            { id: 'green', name: '綠林軍', color: 'bg-green-500' },
-            { id: 'yellow', name: '黃金軍', color: 'bg-yellow-500' },
-            { id: 'purple', name: '紫焰軍', color: 'bg-purple-500' },
-            { id: 'orange', name: '橘虎軍', color: 'bg-orange-500' },
-            { id: 'cyan', name: '青羽軍', color: 'bg-cyan-500' },
+            { id: 'red', name: '紅龍軍', color: 'bg-red-500', border: 'border-red-400' },
+            { id: 'blue', name: '藍鯨軍', color: 'bg-blue-500', border: 'border-blue-400' },
+            { id: 'green', name: '綠林軍', color: 'bg-green-500', border: 'border-green-400' },
+            { id: 'yellow', name: '黃金軍', color: 'bg-yellow-500', border: 'border-yellow-400' },
+            { id: 'purple', name: '紫焰軍', color: 'bg-purple-500', border: 'border-purple-400' },
+            { id: 'orange', name: '橘虎軍', color: 'bg-orange-500', border: 'border-orange-400' },
+            { id: 'cyan', name: '青羽軍', color: 'bg-cyan-500', border: 'border-cyan-400' },
         ];
 
         const QUESTIONS = [
-            { q: "HTML 中連結的標籤是？", a: ["<link>", "<a>", "<img>"], c: 1 },
-            { q: "哪一個是前端框架？", a: ["Django", "React", "Laravel"], c: 1 },
-            { q: "JavaScript 宣告常數用？", a: ["let", "var", "const"], c: 2 },
-            { q: "1KB 等於多少 Byte？", a: ["1000", "1024", "2048"], c: 1 },
-            { q: "網頁內容的結構化語言是？", a: ["CSS", "HTML", "JSON"], c: 1 },
-            { q: "CSS 用來設定字體大小的屬性是？", a: ["text-size", "font-style", "font-size"], c: 2 },
-            { q: "HTTP 的全名開頭是？", a: ["HyperText", "HighText", "HyperTool"], c: 0 },
+            { q: "HTML 中哪一個標籤用於標題最高級？", a: ["<h1>", "<h6>", "<head>"], c: 0 },
+            { q: "哪一個縮寫代表級聯樣式表？", a: ["JS", "CSS", "HTML"], c: 1 },
+            { q: "JavaScript 宣告變數推薦用？", a: ["define", "let", "var"], c: 1 },
+            { q: "網頁設計中，#000000 是什麼顏色？", a: ["白色", "黑色", "紅色"], c: 1 },
+            { q: "下列哪一個可以點擊觸發動作？", a: ["<p>", "<span>", "<button>"], c: 2 },
+            { q: "1MB 等於多少 KB？", a: ["1000", "1024", "2000"], c: 1 },
+            { q: "瀏覽器按下 F12 會開啟？", a: ["下載視窗", "開發者工具", "列印網頁"], c: 1 },
+            { q: "CSS 中的 padding 是設定？", a: ["外邊距", "內邊距", "框線厚度"], c: 1 },
         ];
 
-        // 使用 Google STUN 伺服器增加穿透率
-        const PEER_CONFIG = {
-            config: {
-                'iceServers': [
-                    { url: 'stun:stun.l.google.com:19302' },
-                    { url: 'stun:stun1.l.google.com:19302' }
-                ]
-            }
-        };
-
         function App() {
-            const [mode, setMode] = useState(null); // 'host', 'client'
-            const [clientStage, setClientStage] = useState('connect'); // 'connect', 'setup', 'play'
+            const [mode, setMode] = useState(null);
+            const [clientStage, setClientStage] = useState('connect'); // connect, setup, play
             const [peerId, setPeerId] = useState('');
             const [targetId, setTargetId] = useState('');
             const [grid, setGrid] = useState(Array(100).fill(null));
@@ -65,18 +68,17 @@
             const [myTeam, setMyTeam] = useState(null);
             const [cooldown, setCooldown] = useState(0);
             const [showQuiz, setShowQuiz] = useState(null);
-            const [status, setStatus] = useState('準備中...');
-            
-            const peerRef = useRef(null);
-            const connRef = useRef(null); // 學生端：連向老師的通道
-            const connectionsRef = useRef([]); // 老師端：所有學生的通道
+            const [status, setStatus] = useState('系統就緒');
+            const [feedback, setFeedback] = useState(null);
 
-            // 老師端邏輯
+            const peerRef = useRef(null);
+            const connectionsRef = useRef([]); 
+
             useEffect(() => {
                 if (mode === 'host') {
-                    const peer = new Peer(PEER_CONFIG);
+                    const peer = new Peer({ config: { 'iceServers': [{ url: 'stun:stun.l.google.com:19302' }] } });
                     peerRef.current = peer;
-                    peer.on('open', id => { setPeerId(id); setStatus('等待學生加入...'); });
+                    peer.on('open', id => { setPeerId(id); setStatus('戰場已開啟，等待學生加入...'); });
                     peer.on('connection', conn => {
                         connectionsRef.current.push(conn);
                         conn.on('open', () => { 
@@ -87,7 +89,6 @@
                                 setGrid(prev => {
                                     const next = [...prev];
                                     next[data.index] = { team: data.teamId, owner: data.name };
-                                    // 廣播給所有人
                                     connectionsRef.current.forEach(c => {
                                         if (c.open) c.send({ type: 'SYNC', grid: next });
                                     });
@@ -99,37 +100,49 @@
                 }
             }, [mode]);
 
-            // 學生端連線邏輯
             const connect = () => {
                 if (!targetId) return;
-                const peer = new Peer(PEER_CONFIG);
+                const peer = new Peer({ config: { 'iceServers': [{ url: 'stun:stun.l.google.com:19302' }] } });
                 peerRef.current = peer;
-                setStatus('嘗試連線中...');
+                setStatus('連線中...');
                 peer.on('open', () => {
                     const conn = peer.connect(targetId);
-                    connRef.current = conn;
                     conn.on('open', () => {
                         setStatus('連線成功');
                         setClientStage('setup');
+                        connectionsRef.current = [conn];
                     });
                     conn.on('data', data => { 
                         if (data.type === 'SYNC') setGrid(data.grid); 
                     });
-                    conn.on('error', () => setStatus('連線失敗'));
                 });
             };
 
             const handleAnswer = (idx) => {
-                if (idx === showQuiz.c) {
-                    const index = Math.floor(Math.random() * 100);
-                    if (connRef.current && connRef.current.open) {
-                        connRef.current.send({ type: 'CAPTURE', index, teamId: myTeam.id, name: userName });
+                const isCorrect = idx === showQuiz.c;
+                if (isCorrect) {
+                    setFeedback({ ok: true, msg: '✅ 回答正確！立即佔領！' });
+                    const randomIndex = Math.floor(Math.random() * 100);
+                    if (connectionsRef.current[0]?.open) {
+                        connectionsRef.current[0].send({ 
+                            type: 'CAPTURE', 
+                            index: randomIndex, 
+                            teamId: myTeam.id, 
+                            name: userName 
+                        });
                     }
-                    setCooldown(3);
+                    // 答對不需要冷卻時間
+                    setCooldown(0);
                 } else {
-                    setCooldown(8);
+                    setFeedback({ ok: false, msg: '❌ 回答錯誤！等待 5 秒重整' });
+                    setCooldown(5); // 答錯冷卻 5 秒
                 }
-                setShowQuiz(null);
+                
+                // 顯示反饋 1 秒後關閉視窗
+                setTimeout(() => { 
+                    setShowQuiz(null); 
+                    setFeedback(null); 
+                }, 1000);
             };
 
             useEffect(() => {
@@ -139,56 +152,67 @@
                 }
             }, [cooldown]);
 
-            // 1. 模式選擇
             if (!mode) {
                 return (
-                    <div className="min-h-screen flex items-center justify-center bg-slate-950 p-6">
-                        <div className="glass p-10 rounded-3xl w-full max-w-sm text-center space-y-6 shadow-2xl">
-                            <h1 className="text-3xl font-black text-cyan-400 italic">七軍領地戰</h1>
+                    <div className="min-h-screen flex items-center justify-center p-6 bg-slate-950">
+                        <div className="glass p-12 rounded-[3rem] w-full max-w-md text-center space-y-8 shadow-2xl border-cyan-500/20">
+                            <h1 className="text-5xl font-black text-cyan-400 italic glow-text tracking-tighter">七軍領地戰</h1>
                             <div className="space-y-4">
-                                <button onClick={() => setMode('host')} className="w-full py-4 bg-indigo-600 rounded-xl font-bold">我是老師 (顯示大螢幕)</button>
-                                <button onClick={() => setMode('client')} className="w-full py-4 bg-white text-black rounded-xl font-bold">我是學生 (加入遊戲)</button>
+                                <button onClick={() => setMode('host')} className="w-full py-5 bg-indigo-600 rounded-2xl font-bold text-xl text-white shadow-lg btn-active">我是老師 (投影模式)</button>
+                                <button onClick={() => setMode('client')} className="w-full py-5 bg-white text-slate-900 rounded-2xl font-bold text-xl shadow-lg btn-active">我是學生 (加入遊戲)</button>
                             </div>
                         </div>
                     </div>
                 );
             }
 
-            // 2. 老師介面 (大螢幕)
             if (mode === 'host') {
-                const stats = TEAMS.map(t => ({ ...t, count: grid.filter(g => g?.team === t.id).length }));
+                const stats = TEAMS.map(t => ({ ...t, count: grid.filter(g => g?.team === t.id).length }))
+                                   .sort((a,b) => b.count - a.count);
                 return (
-                    <div className="min-h-screen p-6 bg-slate-950 flex flex-col gap-6">
-                        <div className="flex justify-between items-start">
+                    <div className="h-screen p-8 bg-slate-950 flex flex-col overflow-hidden">
+                        <div className="flex justify-between items-center mb-6">
                             <div>
-                                <h1 className="text-4xl font-black text-cyan-400 italic">戰略即時地圖</h1>
-                                <p className="text-slate-400 font-bold">{status}</p>
+                                <h1 className="text-5xl font-black text-cyan-400 italic glow-text">七軍戰略即時地圖</h1>
+                                <p className="text-slate-500 font-bold mt-2 uppercase tracking-widest">{status}</p>
                             </div>
-                            <div className="glass p-4 rounded-2xl text-center min-w-[200px]">
-                                <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">連線 ID</p>
-                                <p className="text-2xl font-mono font-bold text-white select-all">{peerId || '取得中...'}</p>
+                            <div className="glass p-5 rounded-3xl text-center min-w-[280px] border-cyan-500/30">
+                                <p className="text-xs text-slate-400 font-black uppercase mb-1 tracking-tighter">連線 ID (請輸入此號碼)</p>
+                                <p className="text-4xl font-mono font-bold text-white tracking-widest select-all">{peerId || '取得中...'}</p>
                             </div>
                         </div>
-                        <div className="flex-1 flex gap-6 overflow-hidden">
-                            <div className="w-64 space-y-3">
-                                {stats.sort((a,b) => b.count - a.count).map((s, idx) => (
-                                    <div key={s.id} className="glass p-3 rounded-xl">
-                                        <div className="flex justify-between text-xs font-bold mb-1">
-                                            <span>{s.name}</span>
-                                            <span>{s.count}</span>
+
+                        <div className="flex-1 flex gap-10 overflow-hidden">
+                            {/* 側邊排行榜 - 加大比例 */}
+                            <div className="w-1/4 space-y-4 overflow-y-auto pr-4">
+                                <h2 className="text-2xl font-black text-slate-400 mb-4">軍事排行</h2>
+                                {stats.map((s, idx) => (
+                                    <div key={s.id} className="glass p-5 rounded-2xl leaderboard-item border-l-8" style={{borderLeftColor: s.color.replace('bg-', '')}}>
+                                        <div className="flex justify-between text-2xl font-black mb-2">
+                                            <span className="flex items-center gap-2">
+                                                <span className="text-slate-600">#{idx+1}</span> {s.name}
+                                            </span>
+                                            <span className="text-cyan-400">{s.count}</span>
                                         </div>
-                                        <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
-                                            <div className={`${s.color} h-full transition-all duration-1000`} style={{ width: `${s.count}%` }} />
+                                        <div className="h-4 bg-slate-900 rounded-full overflow-hidden">
+                                            <div className={`${s.color} h-full transition-all duration-1000 shadow-[0_0_15px_rgba(255,255,255,0.2)]`} 
+                                                 style={{ width: `${(s.count / 100) * 100}%` }} />
                                         </div>
                                     </div>
                                 ))}
                             </div>
-                            <div className="flex-1 glass rounded-3xl p-4 relative overflow-hidden flex items-center justify-center">
+
+                            {/* 大型地圖 - 撐滿畫面 */}
+                            <div className="flex-1 glass rounded-[4rem] p-6 relative flex items-center justify-center border-white/5">
                                 <div className="scan-line"></div>
-                                <div className="grid grid-cols-10 gap-1 aspect-square h-full max-h-[600px] w-auto">
+                                <div className="grid grid-cols-10 gap-2 w-full h-full max-w-[800px] aspect-square">
                                     {grid.map((c, i) => (
-                                        <div key={i} className={`grid-cell rounded-sm ${c ? TEAMS.find(t => t.id === c.team).color : 'bg-slate-900/50'}`}>
-                                            {c && <div className="hidden hover:block absolute inset-0 bg-black/50 text-[6px] text-white flex items-center justify-center">{c.owner}</div>}
+                                        <div key={i} className={`grid-cell rounded-md relative group border border-white/5 ${c ? TEAMS.find(t => t.id === c.team).color : 'bg-slate-900/40'}`}>
+                                            {c && (
+                                                <div className="absolute inset-0 opacity-0 hover:opacity-100 bg-black/70 flex items-center justify-center transition-opacity rounded-md">
+                                                    <span className="text-[12px] font-black text-center px-1 leading-tight">{c.owner}</span>
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
@@ -198,35 +222,35 @@
                 );
             }
 
-            // 3. 學生階段：輸入連線 ID
             if (clientStage === 'connect') {
                 return (
-                    <div className="min-h-screen flex items-center justify-center p-6 bg-slate-950">
-                        <div className="glass p-8 rounded-3xl w-full max-w-sm space-y-4">
-                            <h2 className="text-xl font-bold text-white">連線至戰場</h2>
-                            <p className="text-sm text-slate-400">{status}</p>
-                            <input value={targetId} onChange={e => setTargetId(e.target.value)} placeholder="輸入老師提供的 ID" className="w-full p-4 bg-slate-900 rounded-xl border border-slate-700 text-center font-mono text-white outline-none focus:border-cyan-500" />
-                            <button onClick={connect} className="w-full py-4 bg-cyan-600 rounded-xl font-bold text-white shadow-lg">確認連線</button>
+                    <div className="min-h-screen flex items-center justify-center p-6 bg-slate-950 text-white">
+                        <div className="glass p-10 rounded-[2.5rem] w-full max-w-sm space-y-6">
+                            <h2 className="text-2xl font-bold text-center">連線至戰情中心</h2>
+                            <p className="text-center text-slate-400 text-sm">{status}</p>
+                            <input value={targetId} onChange={e => setTargetId(e.target.value)} placeholder="輸入老師提供的 ID" 
+                                className="w-full p-5 bg-slate-900 rounded-2xl border-2 border-slate-700 text-center font-mono text-2xl text-white outline-none focus:border-cyan-500" />
+                            <button onClick={connect} className="w-full py-5 bg-cyan-600 rounded-2xl font-bold text-xl shadow-lg btn-active">確認連線</button>
                         </div>
                     </div>
                 );
             }
 
-            // 4. 學生階段：姓名與軍團選擇
             if (clientStage === 'setup') {
                 return (
-                    <div className="min-h-screen flex flex-col items-center justify-center p-6 space-y-8 bg-slate-950">
+                    <div className="min-h-screen flex flex-col items-center justify-center p-6 space-y-10 bg-slate-950 text-white">
                         <div className="text-center">
-                            <h2 className="text-2xl font-bold text-cyan-400">軍團報到</h2>
-                            <p className="text-slate-500 text-sm">輸入姓名並選擇你的陣營</p>
+                            <h2 className="text-3xl font-black text-cyan-400 glow-text italic">軍團報到</h2>
+                            <p className="text-slate-500 text-sm mt-2">請輸入姓名並選擇陣營</p>
                         </div>
-                        <div className="w-full max-w-xs space-y-4">
-                            <input value={userName} onChange={e => setUserName(e.target.value)} placeholder="你的名字" className="w-full p-4 bg-slate-900 rounded-xl text-center text-white border border-slate-800 outline-none focus:border-indigo-500" />
-                            <div className="grid grid-cols-2 gap-2">
+                        <div className="w-full max-w-xs space-y-6">
+                            <input value={userName} onChange={e => setUserName(e.target.value)} placeholder="你的名字" 
+                                className="w-full p-5 bg-slate-900 rounded-2xl text-center text-white border border-slate-800 outline-none focus:border-indigo-500 text-2xl" />
+                            <div className="grid grid-cols-2 gap-3">
                                 {TEAMS.map(t => (
                                     <button key={t.id} 
-                                        onClick={() => { if(userName.length >= 2){ setMyTeam(t); setClientStage('play'); } }} 
-                                        className={`${t.color} py-3 rounded-xl text-xs font-bold shadow-lg text-white btn-pulse`}>
+                                        onClick={() => { if(userName.length >= 1){ setMyTeam(t); setClientStage('play'); } }} 
+                                        className={`${t.color} py-5 rounded-2xl text-sm font-bold shadow-lg text-white btn-active`}>
                                         {t.name}
                                     </button>
                                 ))}
@@ -236,37 +260,41 @@
                 );
             }
 
-            // 5. 學生階段：戰鬥中 (出擊)
             return (
-                <div className="min-h-screen flex flex-col bg-slate-950">
-                    <div className={`${myTeam?.color} p-4 text-center font-bold text-white shadow-xl flex justify-between px-6`}>
+                <div className="min-h-screen flex flex-col bg-slate-950 text-white">
+                    <div className={`${myTeam?.color} p-5 text-center font-black text-white shadow-xl flex justify-between px-8 text-lg`}>
                         <span>{userName}</span>
                         <span>{myTeam?.name}</span>
                     </div>
                     
-                    <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-10">
+                    <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-12">
                         <button 
                             onClick={() => setShowQuiz(QUESTIONS[Math.floor(Math.random()*QUESTIONS.length)])} 
                             disabled={cooldown > 0 || !!showQuiz} 
-                            className={`w-56 h-56 rounded-full font-black text-2xl transition-all shadow-2xl btn-pulse text-white flex flex-col items-center justify-center
-                            ${cooldown > 0 ? 'bg-slate-800' : myTeam?.color + ' animate-pulse'}`}>
+                            className={`w-64 h-64 rounded-full border-[12px] border-white/10 font-black text-3xl transition-all shadow-2xl btn-active flex flex-col items-center justify-center
+                            ${cooldown > 0 ? 'bg-slate-800 scale-95 opacity-50' : myTeam?.color + ' animate-pulse'}`}>
                             {cooldown > 0 ? (
                                 <>
-                                    <span className="text-5xl">{cooldown}</span>
-                                    <span className="text-xs mt-2 opacity-50 uppercase">Reloading</span>
+                                    <span className="text-7xl">{cooldown}</span>
+                                    <span className="text-xs mt-2 opacity-50 uppercase font-black">Cooling Down</span>
                                 </>
-                            ) : '出擊佔領'}
+                            ) : (
+                                <>
+                                    <span className="text-6xl mb-2">⚔️</span>
+                                    <span>出擊佔領</span>
+                                </>
+                            )}
                         </button>
                         
-                        <div className="w-full max-w-xs space-y-2">
-                            <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase">
-                                <span>當前戰況</span>
-                                <span>佔領數: {grid.filter(g => g?.team === myTeam?.id).length}</span>
+                        <div className="w-full max-w-xs space-y-3">
+                            <div className="flex justify-between text-xs font-bold text-slate-500 uppercase tracking-widest px-1">
+                                <span>即時佔有率</span>
+                                <span>{grid.filter(g => g?.team === myTeam?.id).length}%</span>
                             </div>
-                            <div className="h-1.5 bg-slate-900 rounded-full overflow-hidden flex">
+                            <div className="h-4 bg-slate-900 rounded-full overflow-hidden flex shadow-inner border border-white/5">
                                 {TEAMS.map(t => (
-                                    <div key={t.id} className={`${t.color} h-full transition-all duration-500`} 
-                                         style={{ width: `${grid.filter(g => g?.team === t.id).length}%` }} />
+                                    <div key={t.id} className={`${t.color} h-full transition-all duration-700`} 
+                                         style={{ width: `${(grid.filter(g => g?.team === t.id).length / 100) * 100}%` }} />
                                 ))}
                             </div>
                         </div>
@@ -274,13 +302,26 @@
 
                     {showQuiz && (
                         <div className="fixed inset-0 bg-slate-950/95 flex items-center justify-center p-6 z-50">
-                            <div className="bg-white text-slate-900 w-full max-w-sm rounded-3xl p-8 space-y-6">
-                                <h3 className="text-xl font-bold leading-tight">{showQuiz.q}</h3>
-                                <div className="space-y-3">
-                                    {showQuiz.a.map((ans, i) => (
-                                        <button key={i} onClick={() => handleAnswer(i)} className="w-full p-4 text-left border-2 border-slate-100 rounded-2xl font-bold hover:bg-slate-50 active:bg-slate-100 transition-colors text-sm">{ans}</button>
-                                    ))}
-                                </div>
+                            <div className="bg-white text-slate-900 w-full max-w-sm rounded-[3rem] p-10 space-y-8 shadow-2xl">
+                                {!feedback ? (
+                                    <>
+                                        <div className="space-y-2">
+                                            <span className="px-3 py-1 bg-cyan-100 text-cyan-700 text-xs font-black rounded-full uppercase">Battle Quest</span>
+                                            <h3 className="text-2xl font-black leading-tight">{showQuiz.q}</h3>
+                                        </div>
+                                        <div className="space-y-3">
+                                            {showQuiz.a.map((ans, i) => (
+                                                <button key={i} onClick={() => handleAnswer(i)} 
+                                                    className="w-full p-5 text-left border-2 border-slate-100 rounded-2xl font-bold hover:bg-slate-50 active:bg-slate-100 transition-colors text-lg">{ans}</button>
+                                            ))}
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="text-center py-12 space-y-6">
+                                        <div className="text-9xl">{feedback.ok ? '✅' : '❌'}</div>
+                                        <p className={`text-3xl font-black ${feedback.ok ? 'text-green-600' : 'text-red-600'}`}>{feedback.msg}</p>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
