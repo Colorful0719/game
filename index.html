@@ -3,35 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>七軍領地爭奪戰 - 投影決戰六位數版</title>
+    <title>七軍領地爭奪戰 - P2P 幼教 3C 議題版</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;700;900&display=swap');
-        body { font-family: 'Noto Sans TC', sans-serif; background-color: #020617; color: white; margin: 0; overflow: hidden; }
-        .glass { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(15px); border: 1px solid rgba(255, 255, 255, 0.1); }
-        .grid-cell { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: inset 0 0 15px rgba(0,0,0,0.3); }
-        .btn-active:active { transform: scale(0.92); }
-        .glow-text { text-shadow: 0 0 20px rgba(34, 211, 238, 0.7); }
-        @keyframes scan { from { transform: translateY(-100%); } to { transform: translateY(100vh); } }
-        .scan-line { position: absolute; height: 3px; width: 100%; background: linear-gradient(to right, transparent, #22d3ee, transparent); animation: scan 5s linear infinite; pointer-events: none; z-index: 10; opacity: 0.4; }
-        .timer-glow { text-shadow: 0 0 30px rgba(239, 68, 68, 0.8); }
-        /* 強制正方形容器 */
-        .map-container { aspect-ratio: 1 / 1; width: 100%; max-height: calc(100vh - 250px); margin: 0 auto; }
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;900&display=swap');
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #020617; color: white; margin: 0; overflow-x: hidden; }
+        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .aspect-square { aspect-ratio: 1 / 1; }
+        .grid-cell { transition: background-color 0.4s ease; border: 0.5px solid rgba(255, 255, 255, 0.05); }
+        @keyframes pulse-soft { 0%, 100% { opacity: 1; } 50% { opacity: 0.8; } }
+        .animate-pulse-soft { animation: pulse-soft 2s infinite; }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef, useMemo } = React;
+        const { useState, useEffect, useRef } = React;
 
-        const GAME_DURATION = 300; // 5分鐘
-        const ID_PREFIX = "army6-"; // 用於保證 PeerJS ID 的全球唯一性
-        
         const TEAMS = [
             { id: 'red', name: '紅龍軍', color: 'bg-red-500' },
             { id: 'blue', name: '藍鯨軍', color: 'bg-blue-500' },
@@ -42,126 +35,157 @@
             { id: 'cyan', name: '青羽軍', color: 'bg-cyan-500' },
         ];
 
+        // 18 題專業幼教題庫導入
         const QUESTIONS = [
-            { q: "HTML 中連結的標籤是？", a: ["<link>", "<a>", "<img>"], c: 1 },
-            { q: "JavaScript 宣告常數推薦？", a: ["let", "var", "const"], c: 2 },
-            { q: "CSS 中設定文字顏色是？", a: ["color", "font-style", "text-color"], c: 0 },
-            { q: "網頁設計中 #FFFFFF 是？", a: ["黑色", "灰色", "白色"], c: 2 },
-            { q: "瀏覽器按下 F12 會開啟？", a: ["下載視窗", "開發者工具", "列印網頁"], c: 1 },
-            { q: "1MB 等於多少 KB？", a: ["1000", "1024", "2048"], c: 1 },
-            { q: "下列哪一個是前端框架？", a: ["Django", "Vue.js", "Laravel"], c: 1 },
+            { q: "1. 學齡前幼兒習慣了數位媒體帶來的即時反饋，在參與現實生活時可能容易對實體活動失去興趣。這最主要是屬於下列哪一個影響？", a: ["(A) 社會適應的動態歷程", "(B) 生活自理能的養成", "(C) 情緒能力的內省特質", "(D) 螢幕媒體的即時反饋影響"], c: 3 },
+            { q: "2. 請問「雙薪家庭的父母下班太累，只好讓孩子自己看電視」，這是用哪一個理論來解釋環境對孩子的影響？", a: ["(A) 社會學習理論", "(B) 學前閱讀計劃", "(C) 自我調節理論", "(D) 生態系統理論"], c: 3 },
+            { q: "3. 「弟弟看到哥哥玩手機沒被罵，也跟著學，最後靠哭鬧成功拿到手機。」這屬於哪一個理論說的「觀察與模仿」？", a: ["(A) 數位失智症理論", "(B) 社會學習理論", "(C) 生態系統理論", "(D) 自我調節理論"], c: 1 },
+            { q: "4. 当學齡前幼兒「手機一被拿走就大哭大鬧，沒辦法控制自己想繼續看的衝動」，這在理論上稱微什麼呢？", a: ["(A) 自我調節失效", "(B) 社會能力良好", "(C) 語言能力不足", "(D) 正面安撫策略"], c: 0 },
+            { q: "5. 醫學報導提到，如果3-5歲幼兒每天看3C超過1小時且沒有大人陪伴，大腦中哪一個負責「傳導語言和認知」的通路會發育不好？", a: ["(A) 小腦", "(B) 視覺神經", "(C) 弓狀束", "(D) 脊隨"], c: 2 },
+            { q: "6. 在幼兒園老師的訪談中，疑似過度依賴 3C 的孩子，在學校最明顯的行為表現是什麼？", a: ["(A) 主動幫忙教師維持班級秩序", "(B) 經常熱烈討論3C螢幕產品的相關內容", "(C) 體能活動非常厲害", "(D) 專注力與靜態學習的參與度上明顯較弱"], c: 3 },
+            { q: "7. 在教師訪談結果中，多位老師普遍觀察到近年來的孩子在「生活自理能力」上有何具體改變？", a: ["(A) 嘴巴不會說，但在實際操作上能力非常強", "(B) 生活自理普遍變弱，因為家人常常主動代勞", "(C) 普遍顯著提升，且解決問題的動機強烈", "(D) 進到幼兒園就會自己收書包和穿鞋"], c: 1 },
+            { q: "8. 受訪的家長在管理孩子使用螢幕時間上「沒有遇到管理困難」的主要原因是什麼？", a: ["(A) 長輩說可以看，爸媽就不敢反對", "(B) 隨便孩子看，只要不哭鬧就好", "(C) 規定明確、事先講好時間，並堅持教養原則", "(D) 直接把家裡所有的手機和電視丟掉"], c: 2 },
+            { q: "9. 針對過度螢幕使用經驗議題帶來的影響，在「社會方面」提出的具體建議為何？", a: ["(A) 呼籲科技公司研發更多能完全取代真實親子互動的育兒軟體", "(B) 因為根本問題在家庭教育，社會應完全譴責並處罰家長", "(C) 政府或社會單位提供更多親職教育講座，發展遲緩狀況增加時，亦會加重醫療與社福單位的資源負擔", "(D) 完全取消所有幼兒園的課外活動，全面改為線上數位學習"], c: 2 },
+            { q: "10. 根據我國法律規定，幾歲以上到上小學前的孩子被稱為「學齡前幼兒」？", a: ["(A) 1歲", "(B) 5歲", "(C) 3歲", "(D) 2歲"], c: 3 },
+            { q: "11. 孩子如果習慣了手機或平板的「即時反饋」，可能會出現什麼現象？", a: ["(A) 對現實生活中的實體活動失去興趣", "(B) 會主動幫媽媽做家事", "(C) 變得非常喜歡看書和畫畫", "(D) 生活自理能力會突然變得很厲害"], c: 0 },
+            { q: "12. 下列何者最符合「社會適應」之意涵？", a: ["（A）個體完全遵從環境要求", "（B）個體避免與他人發生衝突", "（C）個體透過競爭取得優勢地位", "（D）個體在與環境互動中持續調整自身行為與心理狀態，以達成平衡關係"], c: 3 },
+            { q: "13. 依據生態系統理論，下列何者最能說明「外部系統影響微系統」？", a: ["（A）幼兒模仿父母滑手機", "（B）兒與同學發生衝突", "（C）幼兒學習遵守班級規範", "（D）父母工作壓力增加，導致陪伴幼兒時間減少"], c: 3 },
+            { q: "14. 社會學習理論強調幼兒學習的重要機制為何？", a: ["（A）生理成熟", "（B）遺傳影響", "（C）觀察、模仿與行為後果", "（D）認知發展階段"], c: 2 },
+            { q: "15. 根據自我調節理論，當幼兒無法控制自己繼續觀看螢幕的衝動時，最可能代表什麼？", a: ["（A）社會能力不足", "（B）情緒表達良好", "（C）自我調節能力尚未成熟或失效", "（D）語言能力落後"], c: 2 },
+            { q: "16. 若幼兒因長期接觸高刺激影音媒體並習慣立即獲得回饋，最可能出現何種學習困難？", a: ["（A）閱讀速度太快", "（B）記憶力過強", "（C）難以維持長時間專注與深度思考", "（D）過度遵守規則"], c: 2 },
+            { q: "17. 教育部推動學前閱讀計畫的主要目的為何？", a: ["（A）培養幼兒使用平板閱讀電子書", "（B）提高幼兒玩線上遊戲能力", "（C）增加閱讀與人際互動機會，促進發展", "（D）完全取代幼兒園課程"], c: 2 },
+            { q: "18. 針對幼兒使用螢幕產品，成人可使用的策略「不包含」何者？", a: ["（A）在幼兒使用螢幕產品學習時不打擾，幼兒身為數位原住民，不需質疑使用能力", "（B）與幼兒討論使用螢幕產品時間，利用沙漏等策略讓時間可視化", "（C）增加親子時光，帶孩子到戶外一起運動", "（D）以身作則，吃飯時將手機遠離，一起好好吃飯"], c: 0 }
         ];
 
+        // 內部前綴防衝突
+        const ROOM_PREFIX = "ntue-ece-room-";
+
         function App() {
-            const [mode, setMode] = useState(null);
-            const [clientStage, setClientStage] = useState('connect'); 
-            const [peerId, setPeerId] = useState(''); // 這邊存 6 位數字
-            const [targetId, setTargetId] = useState(''); 
-            const [grid, setGrid] = useState(Array(100).fill(null));
-            const [timeLeft, setTimeLeft] = useState(GAME_DURATION);
-            const [isGameActive, setIsGameActive] = useState(true);
+            const [role, setRole] = useState(null);
+            const [roomCode, setRoomCode] = useState('');
+            const [inputCode, setInputCode] = useState('');
             const [userName, setUserName] = useState('');
             const [myTeam, setMyTeam] = useState(null);
-            const [cooldown, setCooldown] = useState(0);
+            const [grid, setGrid] = useState(Array(100).fill(null));
+            const [timeLeft, setTimeLeft] = useState(300);
+            const [isStarted, setIsStarted] = useState(false);
             const [showQuiz, setShowQuiz] = useState(null);
-            const [status, setStatus] = useState('系統就緒');
+            const [cooldown, setCooldown] = useState(0);
             const [feedback, setFeedback] = useState(null);
+            const [statusMsg, setStatusMsg] = useState('等待建立連線...');
 
             const peerRef = useRef(null);
-            const connectionsRef = useRef([]);
+            const connectionsRef = useRef([]); // 老師端用：儲存所有學生的連線
+            const connToHostRef = useRef(null); // 學生端用：儲存與老師的連線
 
-            useEffect(() => {
-                if (mode === 'host' && isGameActive) {
-                    const timer = setInterval(() => {
-                        setTimeLeft(prev => {
-                            if (prev <= 1) {
-                                clearInterval(timer);
-                                setIsGameActive(false);
-                                connectionsRef.current.forEach(c => {
-                                    if (c.open) c.send({ type: 'STOP_GAME' });
-                                });
-                                return 0;
-                            }
-                            connectionsRef.current.forEach(c => {
-                                if (c.open) c.send({ type: 'SYNC_TIME', time: prev - 1 });
-                            });
-                            return prev - 1;
-                        });
-                    }, 1000);
-                    return () => clearInterval(timer);
-                }
-            }, [mode, isGameActive]);
+            // 老師端初始化 Peer
+            const startHost = () => {
+                const code = Math.floor(100000 + Math.random() * 900000).toString();
+                setRoomCode(code);
 
-            useEffect(() => {
-                if (mode === 'host') {
-                    const random6 = Math.floor(100000 + Math.random() * 900000).toString();
-                    const peer = new Peer(ID_PREFIX + random6);
-                    peerRef.current = peer;
-                    
-                    peer.on('open', (fullId) => { 
-                        setPeerId(random6); 
-                        setStatus('戰場已開啟'); 
-                    });
-                    
-                    peer.on('connection', conn => {
-                        connectionsRef.current.push(conn);
-                        conn.on('open', () => { 
-                            conn.send({ type: 'SYNC', grid, time: timeLeft }); 
-                        });
-                        conn.on('data', data => {
-                            if (!isGameActive) return;
-                            if (data.type === 'CAPTURE') {
-                                setGrid(prev => {
-                                    const next = [...prev];
-                                    next[data.index] = { team: data.teamId, owner: data.name };
-                                    connectionsRef.current.forEach(c => {
-                                        if (c.open) c.send({ type: 'SYNC', grid: next, time: timeLeft });
-                                    });
-                                    return next;
-                                });
-                            }
-                        });
-                    });
-                }
-            }, [mode]);
-
-            const connect = () => {
-                if (!targetId || targetId.length !== 6) return;
-                const peer = new Peer();
+                const peer = new Peer(ROOM_PREFIX + code);
                 peerRef.current = peer;
-                setStatus('嘗試加入戰場...');
+
                 peer.on('open', () => {
-                    const conn = peer.connect(ID_PREFIX + targetId);
+                    setRole('host');
+                    setStatusMsg(`房間已建立，代碼：${code}`);
+                });
+
+                peer.on('connection', (conn) => {
+                    connectionsRef.current.push(conn);
+                    
+                    // 有新學生連入時，把目前狀態丟給他
                     conn.on('open', () => {
-                        setStatus('連線成功');
-                        setClientStage('setup');
-                        connectionsRef.current = [conn];
+                        conn.send({ type: 'SYNC', grid, timeLeft, isStarted });
                     });
-                    conn.on('data', data => { 
-                        if (data.type === 'SYNC') { setGrid(data.grid); setTimeLeft(data.time); }
-                        if (data.type === 'SYNC_TIME') { setTimeLeft(data.time); }
-                        if (data.type === 'STOP_GAME') { setIsGameActive(false); }
+
+                    // 監聽學生傳來的佔領動作
+                    conn.on('data', (data) => {
+                        if (data.type === 'CAPTURE') {
+                            setGrid(prev => {
+                                const next = [...prev];
+                                next[data.idx] = { team: data.teamId, owner: data.userName };
+                                // 廣播最新地圖給所有人
+                                connectionsRef.current.forEach(c => c.send({ type: 'MAP_UPDATE', grid: next }));
+                                return next;
+                            });
+                        }
                     });
-                    conn.on('error', () => setStatus('連線失敗，請檢查六位數代碼'));
                 });
             };
 
+            // 學生端初始化並連線
+            const connectToHost = () => {
+                if (inputCode.length !== 6 || !userName || !myTeam) {
+                    alert("請填齊六位代碼、姓名並選擇軍團！");
+                    return;
+                }
+
+                const peer = new Peer();
+                peerRef.current = peer;
+
+                peer.on('open', () => {
+                    const conn = peer.connect(ROOM_PREFIX + inputCode);
+                    connToHostRef.current = conn;
+
+                    conn.on('open', () => {
+                        setRole('client');
+                        setStatusMsg("成功連線至大螢幕，等待老師開始...");
+                    });
+
+                    conn.on('data', (data) => {
+                        if (data.type === 'SYNC') {
+                            setTimeLeft(data.timeLeft);
+                            setIsStarted(data.isStarted);
+                        } else if (data.type === 'MAP_UPDATE') {
+                            // P2P版學生端也保持接收，以便未來擴充，或純做狀態顯示
+                        } else if (data.type === 'START') {
+                            setIsStarted(true);
+                        } else if (data.type === 'TICK') {
+                            setTimeLeft(data.timeLeft);
+                        }
+                    });
+                });
+            };
+
+            // 老師端倒數計時與狀態廣播
+            useEffect(() => {
+                let timer;
+                if (role === 'host' && isStarted && timeLeft > 0) {
+                    timer = setInterval(() => {
+                        setTimeLeft(prev => {
+                            const next = prev - 1;
+                            connectionsRef.current.forEach(c => c.send({ type: 'TICK', timeLeft: next }));
+                            return next;
+                        });
+                    }, 1000);
+                }
+                return () => clearInterval(timer);
+            }, [role, isStarted, timeLeft]);
+
+            const handleStartGame = () => {
+                setIsStarted(true);
+                connectionsRef.current.forEach(c => c.send({ type: 'START' }));
+            };
+
             const handleAnswer = (idx) => {
-                if (!isGameActive) return;
-                const isCorrect = idx === showQuiz.c;
-                if (isCorrect) {
-                    setFeedback({ ok: true, msg: '✅ 正確！連擊佔領！' });
-                    const randomIndex = Math.floor(Math.random() * 100);
-                    if (connectionsRef.current[0]?.open) {
-                        connectionsRef.current[0].send({ 
-                            type: 'CAPTURE', index: randomIndex, teamId: myTeam.id, name: userName 
+                if (idx === showQuiz.c) {
+                    setFeedback({ ok: true, msg: '✅ 正確！佔領成功' });
+                    // 發送佔領訊號給老師
+                    const randomIdx = Math.floor(Math.random() * 100);
+                    if (connToHostRef.current) {
+                        connToHostRef.current.send({
+                            type: 'CAPTURE',
+                            idx: randomIdx,
+                            teamId: myTeam.id,
+                            userName: userName
                         });
                     }
-                    setTimeout(() => { setShowQuiz(null); setFeedback(null); }, 400); // 答對極速刷新
+                    setTimeout(() => { setShowQuiz(null); setFeedback(null); }, 400);
                 } else {
-                    setFeedback({ ok: false, msg: '❌ 錯誤！懲罰冷卻 5 秒' });
+                    setFeedback({ ok: false, msg: '❌ 錯誤！冷卻 5 秒' });
                     setCooldown(5);
-                    setTimeout(() => { setShowQuiz(null); setFeedback(null); }, 800);
+                    setTimeout(() => { setShowQuiz(null); setFeedback(null); }, 1000);
                 }
             };
 
@@ -172,227 +196,142 @@
                 }
             }, [cooldown]);
 
-            const formatTime = (s) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
-
-            if (!mode) {
+            // UI 渲染區
+            if (!role) {
                 return (
-                    <div className="min-h-screen flex items-center justify-center p-6 bg-slate-950">
-                        <div className="glass p-12 rounded-[3.5rem] w-full max-w-md text-center space-y-10 border-cyan-500/20">
-                            <h1 className="text-5xl font-black text-cyan-400 italic glow-text tracking-tighter">七軍領地戰</h1>
+                    <div className="min-h-screen flex items-center justify-center p-6">
+                        <div className="glass p-12 rounded-[3rem] w-full max-w-md text-center space-y-8">
+                            <h1 className="text-5xl font-black text-cyan-400 italic">七軍領地戰 (P2P)</h1>
                             <div className="space-y-4">
-                                <button onClick={() => setMode('host')} className="w-full py-6 bg-indigo-600 rounded-2xl font-bold text-xl text-white shadow-lg btn-active">我是老師 (開啟大螢幕)</button>
-                                <button onClick={() => setMode('client')} className="w-full py-6 bg-white text-slate-900 rounded-2xl font-bold text-xl shadow-lg btn-active">我是學生 (加入遊戲)</button>
+                                <button onClick={startHost} className="w-full py-5 bg-indigo-600 rounded-2xl font-bold text-xl">我是老師 (大螢幕)</button>
+                                <button onClick={() => setRole('init-client')} className="w-full py-5 bg-white text-slate-900 rounded-2xl font-bold text-xl">我是學生 (加入)</button>
                             </div>
                         </div>
                     </div>
                 );
             }
 
-            if (mode === 'host') {
-                const stats = TEAMS.map(t => ({ ...t, count: grid.filter(g => g?.team === t.id).length }))
-                                   .sort((a,b) => b.count - a.count);
-                const top3 = stats.slice(0, 3);
-
+            if (role === 'init-client') {
                 return (
-                    <div className="h-screen p-8 bg-slate-950 flex flex-col overflow-hidden relative">
-                        <div className="scan-line"></div>
-                        
-                        <div className="flex justify-between items-center mb-8">
-                            <div className="flex items-center gap-12">
-                                <h1 className="text-6xl font-black text-cyan-400 italic glow-text">七軍戰略地圖</h1>
-                                <div className={`px-12 py-4 rounded-3xl border-4 border-red-500 glass flex items-center gap-6 ${timeLeft < 30 ? 'animate-pulse' : ''}`}>
-                                    <span className="text-2xl font-bold text-red-500 uppercase tracking-tighter">剩餘時間</span>
-                                    <span className="text-6xl font-mono font-black text-white timer-glow">{formatTime(timeLeft)}</span>
+                    <div className="min-h-screen flex items-center justify-center p-6">
+                        <div className="glass p-8 rounded-[2.5rem] w-full max-w-sm space-y-6">
+                            <h2 className="text-2xl font-bold text-center">軍團報到</h2>
+                            <div className="space-y-4">
+                                <input value={inputCode} onChange={e => setInputCode(e.target.value)} maxLength={6} placeholder="輸入 6 位代碼" 
+                                    className="w-full p-4 bg-slate-900 rounded-xl text-center font-mono text-2xl border border-slate-800" />
+                                <input value={userName} onChange={e => setUserName(e.target.value)} placeholder="你的姓名" 
+                                    className="w-full p-4 bg-slate-900 rounded-xl text-center text-lg border border-slate-800" />
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                {TEAMS.map(t => (
+                                    <button key={t.id} onClick={() => setMyTeam(t)} 
+                                        className={`${t.color} py-4 rounded-xl text-sm font-bold active:scale-90 shadow-lg ${myTeam?.id === t.id ? 'ring-4 ring-white' : ''}`}>{t.name}</button>
+                                ))}
+                            </div>
+                            <button onClick={connectToHost} className="w-full py-4 bg-cyan-500 rounded-xl font-bold text-lg text-slate-950">確認加入</button>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (role === 'host') {
+                const stats = TEAMS.map(t => ({ ...t, count: grid.filter(g => g?.team === t.id).length })).sort((a,b) => b.count - a.count);
+                return (
+                    <div className="h-screen p-8 flex flex-col gap-6 relative">
+                        <div className="flex justify-between items-center z-20">
+                            <div className="flex items-center gap-8">
+                                <h1 className="text-5xl font-black text-cyan-400 italic">戰略地圖 (P2P)</h1>
+                                <div className="glass px-8 py-3 rounded-2xl border-red-500/50 flex items-center gap-4">
+                                    <span className="text-red-500 font-bold text-2xl">剩餘時間</span>
+                                    <span className="text-5xl font-mono font-black">{Math.floor(timeLeft/60)}:{(timeLeft%60).toString().padStart(2,'0')}</span>
                                 </div>
                             </div>
-                            <div className="glass px-8 py-4 rounded-3xl text-center min-w-[320px] border-cyan-500/30">
-                                <p className="text-sm text-slate-400 font-black uppercase mb-1 tracking-widest">連線代碼</p>
-                                <p className="text-6xl font-mono font-bold text-white tracking-[0.2em]">{peerId || '......'}</p>
+                            <div className="text-right">
+                                <p className="text-slate-500 text-sm font-bold tracking-widest">連線代碼</p>
+                                <p className="text-6xl font-mono font-black text-white">{roomCode}</p>
                             </div>
                         </div>
 
-                        <div className="flex-1 flex gap-10 overflow-hidden">
-                            {/* 超大排行榜 */}
-                            <div className="w-[35%] space-y-6 overflow-y-auto pr-4">
-                                <h2 className="text-3xl font-black text-slate-400 mb-6 uppercase tracking-widest border-b-2 border-white/10 pb-2">勢力排行</h2>
+                        <div className="flex-1 flex gap-8 min-h-0">
+                            <div className="w-1/3 flex flex-col gap-4">
+                                <h2 className="text-2xl font-bold text-slate-400">勢力排行</h2>
                                 {stats.map((s, idx) => (
-                                    <div key={s.id} className="glass p-6 rounded-3xl border-l-[16px]" style={{borderLeftColor: s.color.replace('bg-', '')}}>
-                                        <div className="flex justify-between text-5xl font-black mb-4">
-                                            <span className="flex items-center gap-4">
-                                                <span className="text-slate-600 text-3xl">#{idx+1}</span> {s.name}
-                                            </span>
+                                    <div key={s.id} className="glass p-5 rounded-2xl">
+                                        <div className="flex justify-between font-black text-2xl">
+                                            <span>#{idx+1} {s.name}</span>
                                             <span className="text-cyan-400">{s.count}</span>
                                         </div>
-                                        <div className="h-8 bg-slate-900 rounded-full overflow-hidden shadow-inner border border-white/5">
-                                            <div className={`${s.color} h-full transition-all duration-1000 shadow-[0_0_20px_rgba(255,255,255,0.2)]`} 
-                                                 style={{ width: `${(s.count / 100) * 100}%` }} />
+                                        <div className="h-4 bg-slate-900 rounded-full overflow-hidden mt-3">
+                                            <div className={`${s.color} h-full transition-all duration-1000`} style={{ width: `${s.count}%` }} />
                                         </div>
                                     </div>
                                 ))}
                             </div>
-
-                            {/* 正方形地圖 */}
-                            <div className="flex-1 glass rounded-[4rem] p-8 flex items-center justify-center border-white/5 shadow-2xl relative">
-                                <div className="map-container">
-                                    <div className="grid grid-cols-10 gap-2 w-full h-full">
-                                        {grid.map((c, i) => (
-                                            <div key={i} className={`grid-cell rounded-md relative group border border-white/5 ${c ? TEAMS.find(t => t.id === c.team).color : 'bg-slate-900/40'}`}>
-                                                {c && (
-                                                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                                        <span className="text-[10px] font-black text-white/50 text-center leading-none uppercase">{c.owner}</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
+                            <div className="flex-1 glass rounded-[3rem] p-6 flex items-center justify-center">
+                                <div className="grid grid-cols-10 grid-rows-10 gap-1 aspect-square w-full max-h-full">
+                                    {grid.map((c, i) => (
+                                        <div key={i} className={`grid-cell rounded-sm ${c ? TEAMS.find(t => t.id === c.team).color : 'bg-slate-900/40'}`} />
+                                    ))}
                                 </div>
                             </div>
                         </div>
 
-                        {/* 最終結算視窗 */}
-                        {!isGameActive && (
-                            <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center animate-in fade-in duration-1000">
-                                <div className="glass p-20 rounded-[5rem] text-center border-yellow-500/30 max-w-4xl w-full">
-                                    <h2 className="text-7xl font-black text-yellow-400 italic glow-text mb-16 underline decoration-yellow-400/30">最終戰報：前三強</h2>
-                                    <div className="flex justify-center items-end gap-10 mb-20">
-                                        {/* 第二名 */}
-                                        <div className="space-y-6">
-                                            <div className={`${top3[1].color} w-36 h-56 rounded-t-3xl flex flex-col items-center justify-center shadow-2xl border-t-8 border-white/30`}>
-                                                <span className="text-5xl font-black">2</span>
-                                                <span className="text-xl font-bold mt-2">{top3[1].count}格</span>
-                                            </div>
-                                            <p className="text-2xl font-bold">{top3[1].name}</p>
-                                        </div>
-                                        {/* 第一名 */}
-                                        <div className="space-y-6">
-                                            <div className="text-7xl mb-4 animate-bounce">👑</div>
-                                            <div className={`${top3[0].color} w-48 h-72 rounded-t-3xl flex flex-col items-center justify-center shadow-[0_0_70px_rgba(234,179,8,0.5)] border-t-8 border-white/50`}>
-                                                <span className="text-7xl font-black">1</span>
-                                                <span className="text-2xl font-bold mt-2">{top3[0].count}格</span>
-                                            </div>
-                                            <p className="text-4xl font-black text-yellow-400">{top3[0].name}</p>
-                                        </div>
-                                        {/* 第三名 */}
-                                        <div className="space-y-6">
-                                            <div className={`${top3[2].color} w-36 h-40 rounded-t-3xl flex flex-col items-center justify-center shadow-2xl border-t-8 border-white/20`}>
-                                                <span className="text-5xl font-black">3</span>
-                                                <span className="text-xl font-bold mt-2">{top3[2].count}格</span>
-                                            </div>
-                                            <p className="text-2xl font-bold">{top3[2].name}</p>
-                                        </div>
-                                    </div>
-                                    <button onClick={() => window.location.reload()} className="px-16 py-6 bg-white text-black font-black rounded-3xl text-2xl hover:scale-105 transition-all active:scale-95 shadow-xl">重新開啟新戰役</button>
+                        {!isStarted && (
+                            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+                                <button onClick={handleStartGame} 
+                                        className="px-20 py-10 bg-cyan-500 rounded-full text-5xl font-black shadow-2xl active:scale-95">開始遊戲</button>
+                            </div>
+                        )}
+
+                        {timeLeft === 0 && (
+                            <div className="fixed inset-0 bg-black/95 flex flex-col items-center justify-center z-[60]">
+                                <h2 className="text-7xl font-black text-yellow-400 mb-8 italic text-center">🏆 最終勝利 🏆<br/>{stats[0].name}</h2>
+                                <div className="flex gap-10 mt-10">
+                                    <div className="text-center"><p className="text-slate-400 text-xl">第二名</p><p className="text-3xl font-bold text-white">{stats[1]?.name || '無'}</p></div>
+                                    <div className="text-center"><p className="text-slate-400 text-xl">第三名</p><p className="text-3xl font-bold text-white">{stats[2]?.name || '無'}</p></div>
                                 </div>
+                                <button onClick={() => window.location.reload()} className="mt-16 px-10 py-4 bg-white text-black font-bold rounded-xl text-xl">重啟戰局</button>
                             </div>
                         )}
                     </div>
                 );
             }
 
-            if (clientStage === 'connect') {
-                return (
-                    <div className="min-h-screen flex items-center justify-center p-6 bg-slate-950 text-white">
-                        <div className="glass p-10 rounded-[3rem] w-full max-w-sm space-y-8">
-                            <h2 className="text-2xl font-bold text-center">連線至戰情中心</h2>
-                            <p className="text-center text-slate-400 text-sm">{status}</p>
-                            <input value={targetId} onChange={e => setTargetId(e.target.value.replace(/\D/g,''))} 
-                                maxLength={6} placeholder="輸入 6 位代碼" 
-                                className="w-full p-6 bg-slate-900 rounded-2xl border-2 border-slate-700 text-center font-mono text-4xl outline-none focus:border-cyan-500" />
-                            <button onClick={connect} className="w-full py-6 bg-cyan-600 rounded-2xl font-bold text-2xl shadow-lg btn-active">確認連線</button>
-                        </div>
-                    </div>
-                );
-            }
-
-            if (clientStage === 'setup') {
-                return (
-                    <div className="min-h-screen flex flex-col items-center justify-center p-6 space-y-10 bg-slate-950 text-white text-center">
-                        <div>
-                            <h2 className="text-4xl font-black text-cyan-400 glow-text italic">軍團報到</h2>
-                            <p className="text-slate-500 mt-2">輸入姓名並選擇陣營</p>
-                        </div>
-                        <div className="w-full max-w-xs space-y-6">
-                            <input value={userName} onChange={e => setUserName(e.target.value)} placeholder="您的姓名 (1字即可)" 
-                                className="w-full p-6 bg-slate-900 rounded-2xl text-center text-white border border-slate-800 outline-none text-2xl" />
-                            <div className="grid grid-cols-2 gap-3">
-                                {TEAMS.map(t => (
-                                    <button key={t.id} 
-                                        onClick={() => { if(userName.length >= 1){ setMyTeam(t); setClientStage('play'); } }} 
-                                        className={`${t.color} py-5 rounded-2xl text-sm font-bold shadow-lg text-white btn-active`}>
-                                        {t.name}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                );
-            }
-
+            // Client 學生主操作端
             return (
-                <div className="min-h-screen flex flex-col bg-slate-950 text-white">
-                    <div className={`${myTeam?.color} p-5 text-center font-black shadow-xl flex justify-between px-8 text-xl items-center`}>
-                        <span>{userName}</span>
-                        <div className="flex items-center gap-4">
-                            <span className="text-sm opacity-80 uppercase tracking-tighter">戰鬥剩餘</span>
-                            <span className="font-mono text-3xl">{formatTime(timeLeft)}</span>
-                        </div>
+                <div className="min-h-screen flex flex-col">
+                    <div className={`${myTeam.color} p-5 flex justify-between items-center text-white font-black shadow-xl`}>
+                        <span className="text-xl">{userName} ({myTeam.name})</span>
+                        <span className="font-mono text-3xl">{Math.floor(timeLeft/60)}:{(timeLeft%60).toString().padStart(2,'0')}</span>
                     </div>
                     
-                    <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-12">
-                        <button 
-                            onClick={() => isGameActive && setShowQuiz(QUESTIONS[Math.floor(Math.random()*QUESTIONS.length)])} 
-                            disabled={cooldown > 0 || !!showQuiz || !isGameActive} 
-                            className={`w-64 h-64 rounded-full border-[12px] border-white/10 font-black text-3xl transition-all shadow-2xl btn-active flex flex-col items-center justify-center
-                            ${!isGameActive ? 'bg-slate-900 opacity-20' : cooldown > 0 ? 'bg-slate-800 scale-95 opacity-50' : myTeam?.color + ' animate-pulse'}`}>
-                            {!isGameActive ? (
-                                <span className="uppercase text-xl">戰鬥結束</span>
-                            ) : cooldown > 0 ? (
-                                <>
-                                    <span className="text-8xl">{cooldown}</span>
-                                    <span className="text-sm mt-2 opacity-50 font-black uppercase">懲罰冷卻中</span>
-                                </>
-                            ) : (
-                                <>
-                                    <span className="text-7xl mb-2">⚔️</span>
-                                    <span>出擊佔領</span>
-                                </>
-                            )}
-                        </button>
-                        
-                        <div className="w-full max-w-xs space-y-4">
-                            <div className="flex justify-between text-xs font-black text-slate-500 uppercase tracking-widest px-1">
-                                <span>全場佔領總覽</span>
-                                <span>{grid.filter(g => g !== null).length} / 100</span>
-                            </div>
-                            <div className="h-4 bg-slate-900 rounded-full overflow-hidden flex shadow-inner border border-white/5">
-                                {TEAMS.map(t => (
-                                    <div key={t.id} className={`${t.color} h-full transition-all duration-700`} 
-                                         style={{ width: `${(grid.filter(g => g?.team === t.id).length / 100) * 100}%` }} />
-                                ))}
-                            </div>
-                        </div>
+                    <div className="flex-1 flex flex-col items-center justify-center p-6">
+                        {!isStarted ? (
+                            <p className="text-xl font-bold text-slate-400 animate-pulse">{statusMsg}</p>
+                        ) : (
+                            <button disabled={cooldown > 0 || !!showQuiz || timeLeft === 0} 
+                                    onClick={() => setShowQuiz(QUESTIONS[Math.floor(Math.random()*QUESTIONS.length)])}
+                                    className={`w-64 h-64 rounded-full border-[12px] border-white/10 flex flex-col items-center justify-center transition-all
+                                    ${timeLeft === 0 ? 'opacity-20' : cooldown > 0 ? 'bg-slate-800 scale-95' : myTeam.color + ' animate-pulse-soft shadow-2xl'}`}>
+                                {cooldown > 0 ? <span className="text-7xl font-black">{cooldown}</span> : <><span className="text-6xl mb-2">⚔️</span><span className="text-2xl font-black tracking-widest">出擊</span></>}
+                            </button>
+                        )}
                     </div>
 
                     {showQuiz && (
                         <div className="fixed inset-0 bg-slate-950/95 flex items-center justify-center p-6 z-50">
-                            <div className="bg-white text-slate-900 w-full max-w-sm rounded-[3rem] p-10 space-y-8 shadow-2xl">
+                            <div className="bg-white text-slate-900 w-full max-w-lg rounded-[2.5rem] p-8 space-y-6 max-h-[90vh] overflow-y-auto">
                                 {!feedback ? (
                                     <>
-                                        <div className="space-y-2">
-                                            <span className="px-4 py-1 bg-cyan-100 text-cyan-700 text-xs font-black rounded-full uppercase">戰場指令</span>
-                                            <h3 className="text-2xl font-black leading-tight">{showQuiz.q}</h3>
-                                        </div>
+                                        <h3 className="text-xl font-bold leading-relaxed">{showQuiz.q}</h3>
                                         <div className="space-y-3">
-                                            {showQuiz.a.map((ans, i) => (
-                                                <button key={i} onClick={() => handleAnswer(i)} 
-                                                    className="w-full p-5 text-left border-2 border-slate-100 rounded-2xl font-bold active:bg-slate-100 transition-colors text-lg">{ans}</button>
-                                            ))}
+                                            {showQuiz.a.map((ans, i) => (<button key={i} onClick={() => handleAnswer(i)} className="w-full p-4 text-left border-2 rounded-xl font-bold text-lg active:bg-slate-100 border-slate-200 transition-colors">{ans}</button>))}
                                         </div>
                                     </>
                                 ) : (
-                                    <div className="text-center py-12 space-y-6">
-                                        <div className="text-9xl animate-bounce">{feedback.ok ? '✅' : '❌'}</div>
-                                        <p className={`text-3xl font-black ${feedback.ok ? 'text-green-600' : 'text-red-600'}`}>{feedback.msg}</p>
+                                    <div className="text-center py-10 space-y-4">
+                                        <div className="text-7xl">{feedback.ok ? '✅' : '❌'}</div>
+                                        <p className="text-2xl font-black">{feedback.msg}</p>
                                     </div>
                                 )}
                             </div>
